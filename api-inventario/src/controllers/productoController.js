@@ -2,20 +2,23 @@
 const db = require('../config/database');
 
 // Obtener todos los productos
-exports.obtenerProductos = (req, res) => {
-    db.all('SELECT * FROM productos ORDER BY id DESC', [], (error, productos) => {
-        if (error) {
-            return res.status(500).json({
-                mensaje: 'Error al consultar los productos'
-            });
-        }
+exports.obtenerProductos = async (req, res) => {
+    try {
+        const resultado = await db.query(
+            'SELECT * FROM productos ORDER BY id DESC'
+        );
 
-        res.json(productos);
-    });
+        res.json(resultado.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            mensaje: 'Error al consultar los productos'
+        });
+    }
 };
 
 // Registrar un producto
-exports.crearProducto = (req, res) => {
+exports.crearProducto = async (req, res) => {
     const { nombre, categoria, precio, stock } = req.body;
 
     if (
@@ -29,32 +32,28 @@ exports.crearProducto = (req, res) => {
         });
     }
 
-    const sql = `
-        INSERT INTO productos (nombre, categoria, precio, stock)
-        VALUES (?, ?, ?, ?)
-    `;
-
-    db.run(sql, [
-        nombre.trim(),
-        categoria.trim(),
-        precio,
-        stock
-    ], function(error) {
-        if (error) {
-            return res.status(500).json({
-                mensaje: 'Error al registrar el producto'
-            });
-        }
+    try {
+        const resultado = await db.query(
+            `INSERT INTO productos (nombre, categoria, precio, stock)
+             VALUES ($1, $2, $3, $4)
+             RETURNING id`,
+            [nombre.trim(), categoria.trim(), precio, stock]
+        );
 
         res.status(201).json({
             mensaje: 'Producto registrado correctamente',
-            id: this.lastID
+            id: resultado.rows[0].id
         });
-    });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            mensaje: 'Error al registrar el producto'
+        });
+    }
 };
 
 // Actualizar un producto
-exports.actualizarProducto = (req, res) => {
+exports.actualizarProducto = async (req, res) => {
     const { nombre, categoria, precio, stock } = req.body;
     const { id } = req.params;
 
@@ -70,26 +69,15 @@ exports.actualizarProducto = (req, res) => {
         });
     }
 
-    const sql = `
-        UPDATE productos
-        SET nombre = ?, categoria = ?, precio = ?, stock = ?
-        WHERE id = ?
-    `;
+    try {
+        const resultado = await db.query(
+            `UPDATE productos
+             SET nombre = $1, categoria = $2, precio = $3, stock = $4
+             WHERE id = $5`,
+            [nombre.trim(), categoria.trim(), precio, stock, Number(id)]
+        );
 
-    db.run(sql, [
-        nombre.trim(),
-        categoria.trim(),
-        precio,
-        stock,
-        Number(id)
-    ], function(error) {
-        if (error) {
-            return res.status(500).json({
-                mensaje: 'Error al actualizar el producto'
-            });
-        }
-
-        if (this.changes === 0) {
+        if (resultado.rowCount === 0) {
             return res.status(404).json({
                 mensaje: 'Producto no encontrado'
             });
@@ -98,11 +86,16 @@ exports.actualizarProducto = (req, res) => {
         res.json({
             mensaje: 'Producto actualizado correctamente'
         });
-    });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            mensaje: 'Error al actualizar el producto'
+        });
+    }
 };
 
 // Eliminar un producto
-exports.eliminarProducto = (req, res) => {
+exports.eliminarProducto = async (req, res) => {
     const { id } = req.params;
 
     if (!/^[1-9]\d*$/.test(id)) {
@@ -111,25 +104,25 @@ exports.eliminarProducto = (req, res) => {
         });
     }
 
-    db.run(
-        'DELETE FROM productos WHERE id = ?',
-        [Number(id)],
-        function(error) {
-            if (error) {
-                return res.status(500).json({
-                    mensaje: 'Error al eliminar el producto'
-                });
-            }
+    try {
+        const resultado = await db.query(
+            'DELETE FROM productos WHERE id = $1',
+            [Number(id)]
+        );
 
-            if (this.changes === 0) {
-                return res.status(404).json({
-                    mensaje: 'Producto no encontrado'
-                });
-            }
-
-            res.json({
-                mensaje: 'Producto eliminado correctamente'
+        if (resultado.rowCount === 0) {
+            return res.status(404).json({
+                mensaje: 'Producto no encontrado'
             });
         }
-    );
+
+        res.json({
+            mensaje: 'Producto eliminado correctamente'
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            mensaje: 'Error al eliminar el producto'
+        });
+    }
 };
